@@ -18,8 +18,12 @@ app = FastAPI(title="ARCHITECH Auth API")
 
 # 1) Token endpoint (records IP in auth.py)
 @app.post("/token", response_model=Token)
-async def login_token(form: OAuth2PasswordRequestForm = Depends(),
-                      db=Depends(get_db), request: Request):
+async def login_token(
+    form: OAuth2PasswordRequestForm = Depends(),
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    ...
     # (See auth.py snippet)
     ...
 
