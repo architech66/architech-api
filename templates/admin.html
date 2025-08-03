@@ -1,48 +1,73 @@
+{# templates/admin.html #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <title>ARCHITECH Admin</title>
-  <link rel="stylesheet" href="/static/css/admin.css"/>
+  <meta charset="UTF-8" />
+  <title>ARCHITECH Admin Panel</title>
+  <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
-  <header>
-    <h1>🔒 ARCHITECH Admin Panel</h1>
-    <nav>
-      <button onclick="showTab('users')">Users</button>
-      <button onclick="showTab('sessions')">Sessions</button>
-      <button onclick="showTab('keys')">API Keys</button>
-      <a href="/admin/logout">Log Out</a>
-    </nav>
-  </header>
-
-  <main>
-    <section id="users" class="tab">
-      <h2>Users</h2>
-      <table><thead><tr>
-        <th>ID</th><th>User</th><th>Admin</th><th>Active</th><th>❌</th>
-      </tr></thead><tbody></tbody></table>
-    </section>
-
-    <section id="sessions" class="tab" style="display:none">
-      <h2>Sessions</h2>
-      <table><thead><tr>
-        <th>ID</th><th>User</th><th>IP</th><th>Agent</th><th>When</th>
-      </tr></thead><tbody></tbody></table>
-    </section>
-
-    <section id="keys" class="tab" style="display:none">
-      <h2>API Keys</h2>
-      <form onsubmit="createKey(event)">
-        <input id="newKeyUser" placeholder="User ID" required/>
-        <button type="submit">Issue Key</button>
+  <div class="login-screen" id="login-screen">
+    <div class="card">
+      <h1>Admin Login</h1>
+      <form method="POST" action="/admin/login">
+        <input name="username" placeholder="Username" required autofocus />
+        <input name="password" placeholder="Password" type="password" required />
+        <button type="submit">Log In</button>
       </form>
-      <table><thead><tr>
-        <th>ID</th><th>User</th><th>Key</th><th>Used</th><th>Revoked</th><th>✖️</th>
-      </tr></thead><tbody></tbody></table>
-    </section>
-  </main>
+    </div>
+  </div>
 
-  <script src="/static/js/admin.js"></script>
+  <div class="app-screen" id="app-screen" style="display:none;">
+    <header>
+      <h1>ARCHITECH Admin</h1>
+      <nav>
+        <a href="#" data-view="users">Manage Users</a>
+        <a href="#" data-view="sessions">Sessions</a>
+        <a href="#" data-view="keys">API Keys</a>
+        <a href="/admin/logout">Log Out</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="view-users" class="view">
+        <h2>Users</h2>
+        <div class="card list">
+          <!-- your users table goes here -->
+        </div>
+      </section>
+
+      <section id="view-sessions" class="view" style="display:none;">
+        <h2>Sessions</h2>
+        <div class="card list">
+          <!-- sessions table -->
+        </div>
+      </section>
+
+      <section id="view-keys" class="view" style="display:none;">
+        <h2>API Keys</h2>
+        <div class="card list">
+          <!-- api-keys management -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // very simple client-side view switcher:
+    document.querySelectorAll('header nav a[data-view]').forEach(a=>{
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+        document.getElementById('view-'+a.dataset.view).style.display='block';
+      });
+    });
+
+    // after a successful login, flip screens:
+    if ({{ 'true' if user_is_authenticated else 'false' }}) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-screen').style.display   = 'block';
+    }
+  </script>
 </body>
 </html>
