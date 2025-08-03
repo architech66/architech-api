@@ -1,73 +1,35 @@
-{# templates/admin.html #}
+<!-- templates/admin.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>ARCHITECH Admin Panel</title>
+  <title>ARCHITECH Admin Login</title>
   <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
-  <div class="login-screen" id="login-screen">
-    <div class="card">
-      <h1>Admin Login</h1>
-      <form method="POST" action="/admin/login">
-        <input name="username" placeholder="Username" required autofocus />
-        <input name="password" placeholder="Password" type="password" required />
+  <div class="login-wrapper">
+    <div class="login-card">
+      <h2>Admin Login</h2>
+      {% if error_message %}
+        <div class="error">{{ error_message }}</div>
+      {% endif %}
+      <form method="post" action="/admin/login">
+        <input
+          type="text"
+          name="username"
+          placeholder="Username"
+          required
+          autofocus
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          required
+        />
         <button type="submit">Log In</button>
       </form>
     </div>
   </div>
-
-  <div class="app-screen" id="app-screen" style="display:none;">
-    <header>
-      <h1>ARCHITECH Admin</h1>
-      <nav>
-        <a href="#" data-view="users">Manage Users</a>
-        <a href="#" data-view="sessions">Sessions</a>
-        <a href="#" data-view="keys">API Keys</a>
-        <a href="/admin/logout">Log Out</a>
-      </nav>
-    </header>
-
-    <main>
-      <section id="view-users" class="view">
-        <h2>Users</h2>
-        <div class="card list">
-          <!-- your users table goes here -->
-        </div>
-      </section>
-
-      <section id="view-sessions" class="view" style="display:none;">
-        <h2>Sessions</h2>
-        <div class="card list">
-          <!-- sessions table -->
-        </div>
-      </section>
-
-      <section id="view-keys" class="view" style="display:none;">
-        <h2>API Keys</h2>
-        <div class="card list">
-          <!-- api-keys management -->
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <script>
-    // very simple client-side view switcher:
-    document.querySelectorAll('header nav a[data-view]').forEach(a=>{
-      a.addEventListener('click', e=>{
-        e.preventDefault();
-        document.querySelectorAll('.view').forEach(v=>v.style.display='none');
-        document.getElementById('view-'+a.dataset.view).style.display='block';
-      });
-    });
-
-    // after a successful login, flip screens:
-    if ({{ 'true' if user_is_authenticated else 'false' }}) {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app-screen').style.display   = 'block';
-    }
-  </script>
 </body>
 </html>
