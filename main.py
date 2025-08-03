@@ -1,71 +1,59 @@
-import os
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.security import OAuth2PasswordRequestForm
+from starlette.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 
-from database import Base, engine, SessionLocal
-from crud import list_users, list_sessions
-from schemas import UserOut, SessionOut, Token
-from auth import create_access_token, decode_access_token
+from database import Base, engine, get_db
+import auth
+import crud
+from schemas import UserCreate, UserOut, SessionOut, Token
 
-# ─── CONFIG ────────────────────────────────────
-ADMIN_USER = "architect66"
-# we’ll read the real password from an ENV VAR:
-ADMIN_PASS = os.getenv("ADMIN_PASS", "")
-
-app = FastAPI(
-    title="ARCHITECH Auth API",
-    docs_url=None, redoc_url=None, openapi_url=None
-)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
+# create all tables
 Base.metadata.create_all(bind=engine)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+app = FastAPI(title="ARCHITECH Auth API")
 
-bearer = HTTPBearer()
+# serve static/admin.html at /admin
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-def require_admin(creds: HTTPAuthorizationCredentials = Depends(bearer)):
-    try:
-        data = decode_access_token(creds.credentials)
-    except:
-        raise HTTPException(401, "Invalid token")
-    if data.get("sub") != ADMIN_USER:
-        raise HTTPException(403, "Forbidden")
-    return True
+@app.post("/token", response_model=Token)
+async def login_token(form: OAuth2PasswordRequestForm = Depends(),
+                      db: Depends(get_db),
+                      request: Request):
+    user = auth.authenticate_user(db, form.username, form.password)
+    if not user:
+        raise HTTPException(401, "Bad credentials")
+    # record IP
+    ip = request.client.host
+    crud.record_session(db, user.id, ip)
+    access = auth.create_access_token(user.username)
+    return {"access_token": access, "token_type": "bearer"}
 
-# ─── ROUTES ───────────────────────────────────
-@app.get("/", include_in_schema=False)
-def root():
-    return RedirectResponse(url="/admin")
+@app.post("/admin/users", response_model=UserOut,
+          dependencies=[Depends(auth.get_admin_user)])
+def admin_create_user(u: UserCreate, db: Depends(get_db)):
+    return crud.create_user(db, u)
 
-@app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-def serve_admin():
+@app.get("/admin/users", response_model=list[UserOut],
+         dependencies=[Depends(auth.get_admin_user)])
+def admin_list_users(db: Depends(get_db)):
+    return crud.list_users(db)
+
+@app.delete("/admin/users/{user_id}", response_model=UserOut,
+            dependencies=[Depends(auth.get_admin_user)])
+def admin_delete_user(user_id: int, db: Depends(get_db)):
+    user = crud.delete_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+@app.get("/admin/sessions", response_model=list[SessionOut],
+         dependencies=[Depends(auth.get_admin_user)])
+def admin_list_sessions(db: Depends(get_db)):
+    return crud.list_sessions(db)
+
+@app.get("/admin", response_class=HTMLResponse,
+         dependencies=[Depends(auth.get_admin_user)])
+def admin_panel():
     with open("static/admin.html") as f:
         return HTMLResponse(f.read())
-
-@app.post("/token", response_model=Token, include_in_schema=False)
-def login_token(form: OAuth2PasswordRequestForm = Depends()):
-    if form.username != ADMIN_USER or form.password != ADMIN_PASS:
-        raise HTTPException(401, "Bad credentials")
-    token = create_access_token({"sub": ADMIN_USER})
-    return {"access_token": token, "token_type": "bearer"}
-
-@app.get("/api/users", response_model=list[UserOut], dependencies=[Depends(require_admin)])
-def api_list_users(db: Session = Depends(get_db)):
-    return list_users(db)
-
-@app.get("/api/sessions", response_model=list[SessionOut], dependencies=[Depends(require_admin)])
-def api_list_sessions(db: Session = Depends(get_db)):
-    return list_sessions(db)
-
-@app.exception_handler(404)
-def not_found(_, __):
-    return JSONResponse({"detail": "Not Found"}, status_code=404)
