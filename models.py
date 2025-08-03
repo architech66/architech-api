@@ -1,4 +1,3 @@
-# models.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,12 +12,14 @@ class User(Base):
     active       = Column(Boolean, default=True)
     twilio_sid   = Column(String, nullable=True)
     twilio_token = Column(String, nullable=True)
-    sessions     = relationship("Session", back_populates="user")
+
+    sessions = relationship("Session", back_populates="user")
 
 class Session(Base):
     __tablename__ = "sessions"
     id         = Column(Integer, primary_key=True, index=True)
-    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id"))
     ip_address = Column(String, nullable=False)
     timestamp  = Column(DateTime, default=datetime.utcnow)
-    user       = relationship("User", back_populates="sessions")
+
+    user = relationship("User", back_populates="sessions")
