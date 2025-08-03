@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>ARCHITECH Admin</title>
+  <link rel="stylesheet" href="/static/css/admin.css"/>
+</head>
+<body>
+  <header>
+    <h1>🔒 ARCHITECH Admin Panel</h1>
+    <nav>
+      <button onclick="showTab('users')">Users</button>
+      <button onclick="showTab('sessions')">Sessions</button>
+      <button onclick="showTab('keys')">API Keys</button>
+      <a href="/admin/logout">Log Out</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="users" class="tab">
+      <h2>Users</h2>
+      <table><thead><tr>
+        <th>ID</th><th>User</th><th>Admin</th><th>Active</th><th>❌</th>
+      </tr></thead><tbody></tbody></table>
+    </section>
+
+    <section id="sessions" class="tab" style="display:none">
+      <h2>Sessions</h2>
+      <table><thead><tr>
+        <th>ID</th><th>User</th><th>IP</th><th>Agent</th><th>When</th>
+      </tr></thead><tbody></tbody></table>
+    </section>
+
+    <section id="keys" class="tab" style="display:none">
+      <h2>API Keys</h2>
+      <form onsubmit="createKey(event)">
+        <input id="newKeyUser" placeholder="User ID" required/>
+        <button type="submit">Issue Key</button>
+      </form>
+      <table><thead><tr>
+        <th>ID</th><th>User</th><th>Key</th><th>Used</th><th>Revoked</th><th>✖️</th>
+      </tr></thead><tbody></tbody></table>
+    </section>
+  </main>
+
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>
