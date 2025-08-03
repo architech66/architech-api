@@ -12,8 +12,7 @@ class User(Base):
     active       = Column(Boolean, default=True)
     twilio_sid   = Column(String, nullable=True)
     twilio_token = Column(String, nullable=True)
-
-    sessions = relationship("Session", back_populates="user")
+    sessions     = relationship("Session", back_populates="user")
 
 class Session(Base):
     __tablename__ = "sessions"
@@ -21,5 +20,4 @@ class Session(Base):
     user_id    = Column(Integer, ForeignKey("users.id"))
     ip_address = Column(String, nullable=False)
     timestamp  = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="sessions")
+    user       = relationship("User", back_populates="sessions")
