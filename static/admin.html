@@ -1,176 +1,81 @@
+<!-- static/admin.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>ARCHITECH Admin Panel</title>
-
   <style>
-    :root {
-      --color-bg:   #111;
-      --color-text: #eee;
-      --color-accent: #0ff;
-      --color-panel: #222;
-      --color-btn:  #0aa;
-      --color-btn-hover: #088;
-    }
-    body {
-      background: var(--color-bg);
-      color: var(--color-text);
-      font-family: monospace;
-      padding: 20px;
-    }
-    h1,h2 { color: var(--color-accent); }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1em;
-      background: var(--color-panel);
-    }
-    th, td {
-      border: 1px solid #333;
-      padding: 8px;
-    }
-    th { background: #333; }
-    input, button {
-      padding: 6px;
-      margin: 4px 0;
-      font: inherit;
-    }
-    button {
-      background: var(--color-btn);
-      color: var(--color-text);
-      border: none;
-      cursor: pointer;
-    }
-    button:hover {
-      background: var(--color-btn-hover);
-    }
-    .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;}
-    .hidden { display: none; }
-    #login-panel {
-      max-width: 400px;
-      margin: 4em auto;
-      padding: 2em;
-      background: var(--color-panel);
-      border-radius: 8px;
-    }
-    #dashboard { display: none; }
+    body { background:#111; color:#eee; font-family:monospace; padding:20px }
+    h1,h2 { color:#0ff }
+    table { width:100%; border-collapse:collapse; margin-bottom:1em }
+    th,td { border:1px solid #333; padding:8px; text-align:center }
+    th { background:#222 }
+    input,button { padding:6px; margin:4px; background:#222; color:#eee; border:1px solid #444 }
+    .flex { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
   </style>
 </head>
-
 <body>
-  <div id="login-panel">
-    <h1>🔒 Admin Login</h1>
-    <div class="flex">
-      <input id="username" placeholder="Username" />
-      <input id="password" type="password" placeholder="Password" />
-      <button onclick="doLogin()">Login</button>
-    </div>
-    <div id="login-error" style="color:tomato;"></div>
+  <h1>🔒 ARCHITECH Admin Panel</h1>
+  <div class="flex">
+    <label>JWT: <input id="jwt" size="60" /></label>
+    <button onclick="loadUsers()">Users</button>
+    <button onclick="loadSessions()">Sessions</button>
+    <button onclick="loadKeys()">API Keys</button>
   </div>
 
-  <div id="dashboard">
-    <h1>Welcome, Admin</h1>
-    <div class="flex">
-      <button onclick="loadUsers()">Refresh Users</button>
-      <button onclick="loadSessions()">Refresh Sessions</button>
-      <button onclick="logout()">Logout</button>
-    </div>
+  <h2>Create New User</h2>
+  <form id="createForm" onsubmit="createUser();return false;">
+    <input id="u_name" placeholder="Username"/>&nbsp;
+    <input id="u_pw"   placeholder="Password"/>&nbsp;
+    <label>Admin<input type="checkbox" id="u_admin"/></label>&nbsp;
+    <input id="u_sid"  placeholder="Twilio SID"/>&nbsp;
+    <input id="u_tok"  placeholder="Twilio Token"/>&nbsp;
+    <button type="submit">Create</button>
+  </form>
 
-    <h2>Create New User</h2>
-    <form id="createForm" onsubmit="createUser();return false;">
-      <div class="flex">
-        <input id="u_name" placeholder="Username" />
-        <input id="u_pw"   placeholder="Password" />
-        <label>
-          Admin <input type="checkbox" id="u_admin" />
-        </label>
-        <input id="u_sid"  placeholder="Twilio SID" />
-        <input id="u_tok"  placeholder="Twilio Token" />
-        <button type="submit">Create</button>
-      </div>
-    </form>
+  <h2>Users</h2>
+  <table id="users"><thead><tr>
+    <th>ID</th><th>User</th><th>Admin</th><th>Active</th><th>SID</th><th>Token</th><th>Actions</th>
+  </tr></thead><tbody></tbody></table>
 
-    <h2>Users</h2>
-    <table id="users">
-      <thead>
-        <tr>
-          <th>ID</th><th>User</th><th>Admin</th><th>Active</th><th>SID</th><th>Token</th><th>Action</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+  <h2>Sessions</h2>
+  <table id="sessions"><thead><tr>
+    <th>ID</th><th>User</th><th>IP</th><th>Device</th><th>OS</th><th>Agent</th><th>When</th>
+  </tr></thead><tbody></tbody></table>
 
-    <h2>Sessions</h2>
-    <table id="sessions">
-      <thead>
-        <tr>
-          <th>ID</th><th>User ID</th><th>IP Address</th><th>When</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+  <h2>API Keys</h2>
+  <form id="createKeyForm" onsubmit="createKey();return false;">
+    <input id="k_user"   placeholder="User ID" size="4"/>
+    <input id="k_scopes" placeholder="Scopes, comma-sep"/>
+    <input id="k_quota"  placeholder="Quota(leave blank=∞)" size="6"/>
+    <button type="submit">Generate Key</button>
+  </form>
+  <table id="keys"><thead><tr>
+    <th>ID</th><th>User</th><th>Key</th><th>Scopes</th>
+    <th>Used</th><th>Quota</th><th>Created</th><th>Revoked</th><th>Actions</th>
+  </tr></thead><tbody></tbody></table>
 
   <script>
-    const API = "https://api.architechhq.xyz";
-    let jwt = "";
+    const API = window.location.origin;
+    function getJWT(){ return document.getElementById('jwt').value; }
 
-    function showError(msg) {
-      document.getElementById("login-error").textContent = msg;
-    }
-
-    async function doLogin() {
-      const u = document.getElementById("username").value;
-      const p = document.getElementById("password").value;
-      try {
-        const form = new URLSearchParams({ username: u, password: p });
-        const res = await fetch(API + "/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: form
-        });
-        if (!res.ok) throw new Error("Bad credentials");
-        const { access_token } = await res.json();
-        jwt = access_token;
-        document.getElementById("login-panel").classList.add("hidden");
-        document.getElementById("dashboard").style.display = "";
-        loadUsers();
-        loadSessions();
-      } catch (err) {
-        showError("Login failed");
-      }
-    }
-
-    function logout() {
-      jwt = "";
-      document.getElementById("dashboard").style.display = "none";
-      document.getElementById("login-panel").classList.remove("hidden");
-    }
-
-    async function loadUsers() {
-      const res = await fetch(API + "/api/users", {
-        headers: { "Authorization": "Bearer " + jwt }
-      });
+    // USERS
+    async function loadUsers(){
+      const res = await fetch(API+"/admin/users", {headers:{"Authorization":"Bearer "+getJWT()}});
       const data = await res.json();
-      const tbody = document.querySelector("#users tbody");
-      tbody.innerHTML = "";
-      data.forEach(u => {
-        tbody.innerHTML += `
+      const tb = document.querySelector("#users tbody");
+      tb.innerHTML="";
+      data.forEach(u=>{
+        tb.innerHTML+=`
           <tr>
-            <td>${u.id}</td>
-            <td>${u.username}</td>
-            <td>${u.is_admin}</td>
-            <td>${u.active}</td>
-            <td>${u.twilio_sid||""}</td>
-            <td>${u.twilio_token||""}</td>
+            <td>${u.id}</td><td>${u.username}</td><td>${u.is_admin}</td>
+            <td>${u.active}</td><td>${u.twilio_sid||''}</td>
+            <td>${u.twilio_token||''}</td>
             <td><button onclick="deleteUser(${u.id})">Delete</button></td>
-          </tr>
-        `;
+          </tr>`;
       });
     }
-
-    async function createUser() {
+    async function createUser(){
       const body = {
         username: document.getElementById("u_name").value,
         password: document.getElementById("u_pw").value,
@@ -178,45 +83,90 @@
         twilio_sid: document.getElementById("u_sid").value,
         twilio_token: document.getElementById("u_tok").value
       };
-      await fetch(API + "/api/users", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + jwt,
-          "Content-Type": "application/json"
+      await fetch(API+"/admin/users", {
+        method:"POST",
+        headers:{
+          "Authorization":"Bearer "+getJWT(),
+          "Content-Type":"application/json"
         },
         body: JSON.stringify(body)
       });
       loadUsers();
-      document.getElementById("createForm").reset();
     }
-
-    async function deleteUser(id) {
-      if (!confirm(`Delete user #${id}?`)) return;
-      await fetch(API + `/api/users/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": "Bearer " + jwt }
+    async function deleteUser(id){
+      if(!confirm("Delete user #"+id+"?")) return;
+      await fetch(API+`/admin/users/${id}`, {
+        method:"DELETE", headers:{"Authorization":"Bearer "+getJWT()}
       });
       loadUsers();
     }
 
-    async function loadSessions() {
-      const res = await fetch(API + "/api/sessions", {
-        headers: { "Authorization": "Bearer " + jwt }
-      });
+    // SESSIONS
+    async function loadSessions(){
+      const res = await fetch(API+"/admin/sessions", {headers:{"Authorization":"Bearer "+getJWT()}});
       const data = await res.json();
-      const tbody = document.querySelector("#sessions tbody");
-      tbody.innerHTML = "";
-      data.forEach(s => {
-        tbody.innerHTML += `
+      const tb = document.querySelector("#sessions tbody");
+      tb.innerHTML="";
+      data.forEach(s=>{
+        tb.innerHTML+=`
           <tr>
-            <td>${s.id}</td>
-            <td>${s.user_id}</td>
-            <td>${s.ip_address}</td>
+            <td>${s.id}</td><td>${s.user_id}</td><td>${s.ip_address}</td>
+            <td>${s.device_model||''}</td><td>${s.os_info||''}</td>
+            <td>${s.user_agent||''}</td>
             <td>${new Date(s.timestamp).toLocaleString()}</td>
-          </tr>
-        `;
+          </tr>`;
       });
     }
+
+    // API KEYS
+    async function loadKeys(){
+      const res = await fetch(API+"/admin/keys", {headers:{"Authorization":"Bearer "+getJWT()}});
+      const data = await res.json();
+      const tb = document.querySelector("#keys tbody");
+      tb.innerHTML="";
+      data.forEach(k=>{
+        tb.innerHTML+=`
+          <tr>
+            <td>${k.id}</td><td>${k.user_id}</td>
+            <td>${k.key.slice(0,6)}•••</td>
+            <td>${k.scopes.join(",")}</td>
+            <td>${k.usage_count}</td>
+            <td>${k.usage_quota===null?"∞":k.usage_quota}</td>
+            <td>${new Date(k.created_at).toLocaleString()}</td>
+            <td>${k.revoked}</td>
+            <td><button onclick="revokeKey('${k.key}')">Revoke</button></td>
+          </tr>`;
+      });
+    }
+    async function createKey(){
+      const body = {
+        user_id:   parseInt(document.getElementById("k_user").value),
+        scopes:    document.getElementById("k_scopes").value.split(","),
+        usage_quota: document.getElementById("k_quota").value
+                      ? parseInt(document.getElementById("k_quota").value)
+                      : null
+      };
+      await fetch(API+"/admin/keys", {
+        method:"POST",
+        headers:{
+          "Authorization":"Bearer "+getJWT(),
+          "Content-Type":"application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      loadKeys();
+    }
+    async function revokeKey(key){
+      if(!confirm("Revoke key "+key.slice(0,6)+"…?")) return;
+      await fetch(API+`/admin/keys/${key}`, {
+        method:"DELETE",
+        headers:{"Authorization":"Bearer "+getJWT()}
+      });
+      loadKeys();
+    }
+
+    // initialize
+    window.onload = ()=>{ loadUsers(); loadSessions(); loadKeys(); };
   </script>
 </body>
 </html>
