@@ -15,7 +15,7 @@ from crud import get_user_by_username  # see step 2
 from schemas import Token
 
 # load these from env in production!
-SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_TO_A_RANDOM_32BYTE_HEX")
+SECRET_KEY = os.getenv("SECRET_KEY", "f2487a44fee137302e164195684a3d99")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
