@@ -2,20 +2,17 @@ from sqlalchemy.orm import Session
 from models import User, Session as Sess
 from security import get_password_hash
 
-def get_user_by_username(db: Session, username: str):
-    return db.query(User).filter(User.username == username).first()
-
 def create_user(db: Session, u):
-    h = get_password_hash(u.password)
-    usr = User(
+    pw_hash = get_password_hash(u.password)
+    user = User(
         username=u.username,
-        hashed_pw=h,
+        hashed_pw=pw_hash,
         is_admin=u.is_admin,
         twilio_sid=u.twilio_sid,
         twilio_token=u.twilio_token
     )
-    db.add(usr); db.commit(); db.refresh(usr)
-    return usr
+    db.add(user); db.commit(); db.refresh(user)
+    return user
 
 def list_users(db: Session):
     return db.query(User).all()
