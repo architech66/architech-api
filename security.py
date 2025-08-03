@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from typing import Optional
 from pydantic import BaseModel
 
-SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_THIS_SECRET")
+SECRET_KEY = os.getenv("SECRET_KEY", "f2487a44fee137302e164195684a3d99")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
