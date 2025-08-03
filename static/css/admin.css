@@ -1,70 +1,82 @@
 /* static/css/admin.css */
-body, html {
-  margin: 0; padding: 0;
-  height: 100%; font-family: sans-serif;
-  background: #111; color: #eee;
-}
-.login-screen, .app-screen {
-  display: flex; align-items: center; justify-content: center;
-  height: 100%;
-}
-.card {
-  background: #222;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  width: 320px;
-}
-.card h1, .card h2 {
-  margin-top: 0;
-  font-size: 1.5rem;
-  text-align: center;
-}
-.card input {
-  width: 100%;
-  padding: 0.75rem;
-  margin: 0.5rem 0;
-  border: none;
-  border-radius: 4px;
-}
-.card button {
-  width: 100%;
-  padding: 0.75rem;
-  margin-top: 1rem;
-  background: #0a84ff;
-  border: none;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.card button:hover {
-  background: #006fe6;
-}
-
-header {
-  background: #1a1a1a;
-  padding: 1rem;
+body {
+  margin: 0;
+  height: 100vh;
+  background: #0b0d17;
+  overflow: hidden;
   display: flex;
+  justify-content: center;
   align-items: center;
-  justify-content: space-between;
 }
-header h1 {
-  margin: 0; font-size: 1.25rem;
+/* simple pulsing radial gradient animation */
+@keyframes pulse {
+  0%   { background-size: 100% 100%; }
+  50%  { background-size: 150% 150%; }
+  100% { background-size: 100% 100%; }
 }
-header nav a {
-  color: #ccc; margin-left: 1rem; text-decoration: none;
-  padding: 0.5rem 0.75rem; border-radius: 4px;
-}
-header nav a:hover {
-  background: #333;
-  color: #fff;
+body::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  background: radial-gradient(circle at center, rgba(0,123,255,0.2), transparent 70%);
+  animation: pulse 6s ease-in-out infinite;
+  z-index: 0;
 }
 
-main {
-  padding: 2rem;
+.login-wrapper {
+  position: relative;
+  z-index: 1;
 }
-.list {
-  background: #222;
-  padding: 1rem;
-  border-radius: 8px;
+.login-card {
+  background: #1a1c23;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 320px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  text-align: center;
+  color: #fff;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.login-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+}
+.login-card h2 {
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+.login-card .error {
+  background: #e74c3c;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.login-card input {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #fffbea;
+  outline: none;
+  font-size: 1rem;
+}
+.login-card button {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #007bff;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.login-card button:hover {
+  background: #0056b3;
 }
