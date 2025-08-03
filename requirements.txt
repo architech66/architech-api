@@ -1,8 +1,9 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-jinja2
-python-dotenv
-passlib[bcrypt]
-python-jose[cryptography]
-python-multipart
+ fastapi
+ uvicorn[standard]
+ sqlalchemy
+ jinja2
+ python-dotenv
+ passlib[bcrypt]
+ python-jose[cryptography]
+ python-multipart
++itsdangerous
