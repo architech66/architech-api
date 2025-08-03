@@ -1,93 +1,98 @@
 # main.py
-from fastapi import FastAPI, Depends, HTTPException, Request, Form
+from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 
-from database import Base, engine, Session  # your existing imports
-from auth import authenticate_user, create_access_token, get_current_user, get_admin_user, get_db
-from crud import create_user, list_users, delete_user, list_sessions, record_session
-from schemas import UserCreate, UserOut, SessionOut, Token
+from database import Base, engine
+from crud import list_users, list_sessions
+from auth import get_db
+from schemas import UserOut, SessionOut
 
-# create your tables as before
+# 1) Create all tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ARCHITECH Auth API")
 
-# 1) Serve static files from ./static
+# 2) Mount our static files & setup Jinja2
 app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Environment(loader=FileSystemLoader("templates"))
 
-# 2) Point Jinja2Templates at ./templates
-templates = Jinja2Templates(directory="templates")
-
-
-# ---- your existing API endpoints (token, CRUD, etc.) go here unchanged ----
-# e.g.:
-# @app.post("/token", response_model=Token)
-# async def login_token(...):
-#     ...
-
-
-# ---- new simple admin‐panel auth + templating ----
-
-# hard-coded admin creds:
+# 3) Hard-coded admin credentials (note the doubled backslash)
 ADMIN_USER = "architect66"
-ADMIN_PASS = r"v+ir2E9WELO%JY\H"
+ADMIN_PASS = "v+ir2E9WELO%JY\\H"
 
-def is_admin_cookie(request: Request) -> bool:
-    return request.cookies.get("admin_auth") == "1"
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_get(request: Request):
+async def admin_login_page(request: Request):
     """
-    GET /admin
-    - if not logged in: shows login form
-    - if logged in: shows main panel (templates/admin.html JS will flip views)
+    Show login form. No auth required here.
     """
-    auth = is_admin_cookie(request)
-    return templates.TemplateResponse(
-        "admin.html",
-        {"request": request, "user_is_authenticated": auth}
-    )
+    html = templates.get_template("admin.html").render({"error_message": None})
+    return HTMLResponse(html)
+
 
 @app.post("/admin/login", response_class=HTMLResponse)
-async def admin_login(
+async def admin_login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...)
 ):
     """
-    POST /admin/login
-    Checks form creds, sets a secure cookie on success, redirects back to /admin.
+    Process login. On success, set a cookie and redirect to /admin/panel.
     """
     if username != ADMIN_USER or password != ADMIN_PASS:
-        # send back to login with an error (you can wire this into your template later)
-        return templates.TemplateResponse(
-            "admin.html",
-            {
-                "request": request,
-                "user_is_authenticated": False,
-                "error_message": "Invalid username or password."
-            }
-        )
+        html = templates.get_template("admin.html").render({
+            "error_message": "Invalid credentials"
+        })
+        return HTMLResponse(html, status_code=401)
 
-    # on success, set cookie and redirect
-    response = RedirectResponse(url="/admin", status_code=302)
-    response.set_cookie(
-        key="admin_auth",
-        value="1",
-        httponly=True,
-        secure=True,      # HTTPS-only
-        max_age=60*60*24  # 1 day
-    )
+    response = RedirectResponse(url="/admin/panel", status_code=302)
+    response.set_cookie(key="admin_auth", value="true", httponly=True)
     return response
 
-@app.get("/admin/logout")
-async def admin_logout():
+
+def require_admin(request: Request):
     """
-    GET /admin/logout
-    Clears the auth cookie and redirects to /admin (login screen).
+    Dependency to protect private admin routes.
     """
-    response = RedirectResponse(url="/admin", status_code=302)
-    response.delete_cookie("admin_auth")
-    return response
+    if request.cookies.get("admin_auth") == "true":
+        return True
+    raise HTTPException(status_code=403, detail="Not authenticated")
+
+
+@app.get(
+    "/admin/panel",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin)]
+)
+async def admin_panel(request: Request):
+    """
+    Render the actual admin panel (templates/panel.html).
+    """
+    html = templates.get_template("panel.html").render({})
+    return HTMLResponse(html)
+
+
+@app.get(
+    "/admin/users",
+    response_model=list[UserOut],
+    dependencies=[Depends(require_admin)]
+)
+async def admin_list_users(db=Depends(get_db)):
+    """
+    Return JSON list of users.
+    """
+    return list_users(db)
+
+
+@app.get(
+    "/admin/sessions",
+    response_model=list[SessionOut],
+    dependencies=[Depends(require_admin)]
+)
+async def admin_list_sessions(db=Depends(get_db)):
+    """
+    Return JSON list of sessions.
+    """
+    return list_sessions(db)
