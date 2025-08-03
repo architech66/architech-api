@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="/static/css/admin.css"/>
+</head>
+<body>
+  <div class="center box">
+    <h1>Admin Login</h1>
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+    <form action="/admin/login" method="post">
+      <input name="username" placeholder="Username" required/>
+      <input name="password" type="password" placeholder="Password" required/>
+      <button type="submit">Log In</button>
+    </form>
+  </div>
+</body>
+</html>
