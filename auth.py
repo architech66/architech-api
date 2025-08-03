@@ -1,19 +1,38 @@
-# add:
-from fastapi import Request
-from crud import record_session
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+from database import get_db
+from models import User
+from schemas import TokenData
+import crud
 
-# inside login_token():
-@app.post("/token", response_model=Token)
-async def login_token(
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
-    request: Request
-):
-    user = authenticate_user(db, form.username, form.password)
-    if not user:
-        raise HTTPException(401, "Bad credentials")
-    # record IP
-    ip = request.client.host
-    record_session(db, user.id, ip)
-    access = create_access_token({"sub": user.username})
-    return {"access_token": access, "token_type": "bearer"}
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+SECRET_KEY = "your-secret-key"
+ALGORITHM = "HS256"
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+
+    user = crud.get_user_by_username(db, username=token_data.username)
+    if user is None:
+        raise credentials_exception
+    return user
