@@ -31,3 +31,7 @@ class SessionOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+# ← Insert TokenData here
+class TokenData(BaseModel):
+    username: str | None = None
