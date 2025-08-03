@@ -1,111 +1,88 @@
-# main.py
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse, HTMLResponse
+import os
+from fastapi import FastAPI, Request, Depends, HTTPException, Form
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from database import Base, engine, get_db
-import auth, crud
-from schemas import (
-    UserCreate, UserOut,
-    SessionOut,
-    APIKeyCreate, APIKeyOut,
-    Token
+from crud import (
+    authenticate_user, list_users, delete_user,
+    list_sessions, record_session,
+    create_api_key, list_api_keys, revoke_api_key
 )
+from security import ADMIN_USER, ADMIN_PASS, SESSION_SECRET
+from schemas import UserOut, SessionOut, ApiKeyOut
 
-# Create DB tables
+# Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="ARCHITECH Auth API")
-
-# Serve admin UI
+app = FastAPI()
+# mount static/
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-# --- Middleware for API-key quota enforcement ---
-@app.middleware("http")
-async def api_key_quota_middleware(request: Request, call_next):
-    key_str = request.headers.get("X-API-Key")
-    if key_str:
-        db = next(get_db())
-        from models import APIKey
-        ak = db.query(APIKey).filter_by(key=key_str, revoked=False).first()
-        if not ak:
-            return JSONResponse(status_code=403, content={"detail":"Invalid API Key"})
-        if ak.usage_quota is not None and ak.usage_count >= ak.usage_quota:
-            return JSONResponse(status_code=429, content={"detail":"Quota exceeded"})
-        ak.usage_count += 1
-        db.commit()
-    return await call_next(request)
+# dependency: only admin may call
+def require_admin(req: Request):
+    if req.session.get("user") != ADMIN_USER:
+        raise HTTPException(401, "Not authenticated")
 
-# --- Token endpoint with hardware capture ---
-@app.post("/token", response_model=Token)
-async def login_token(
-    request: Request,
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    user = auth.authenticate_user(db, form.username, form.password)
-    if not user:
-        raise HTTPException(401, "Bad credentials")
+# ——— LOGIN FLow ————————————————————————————————
 
-    # capture hardware info
-    dev = request.headers.get("X-Device-Model")
-    os_ = request.headers.get("X-OS-Info")
-    ua  = request.headers.get("User-Agent")
+@app.get("/admin")
+def get_admin(request: Request):
+    if request.session.get("user") != ADMIN_USER:
+        return templates.TemplateResponse("login.html", {"request": request, "error": ""})
+    return templates.TemplateResponse("admin.html", {"request": request})
 
-    crud.record_session(db, user.id, request.client.host,
-                        device_model=dev, os_info=os_, user_agent=ua)
+@app.post("/admin/login")
+def do_login(request: Request,
+             username: str = Form(...),
+             password: str = Form(...)):
+    if username == ADMIN_USER and password == ADMIN_PASS:
+        request.session["user"] = ADMIN_USER
+        return RedirectResponse("/admin", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials"})
 
-    token = auth.create_access_token(user.username)
-    return {"access_token": token, "token_type": "bearer"}
+@app.get("/admin/logout")
+def do_logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/admin", status_code=302)
 
-# --- User management ---
-@app.post("/admin/users", response_model=UserOut,
-          dependencies=[Depends(auth.get_admin_user)])
-def admin_create_user(u: UserCreate, db: Session = Depends(get_db)):
-    return crud.create_user(db, u)
+# ——— ADMIN AJAX ENDPOINTS ————————————————————————
 
-@app.get("/admin/users", response_model=list[UserOut],
-         dependencies=[Depends(auth.get_admin_user)])
-def admin_list_users(db: Session = Depends(get_db)):
-    return crud.list_users(db)
+@app.get("/admin/users", dependencies=[Depends(require_admin)], response_model=list[UserOut])
+def ajax_list_users(db=Depends(get_db)):
+    return list_users(db)
 
-@app.delete("/admin/users/{user_id}", response_model=UserOut,
-            dependencies=[Depends(auth.get_admin_user)])
-def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
-    u = crud.delete_user(db, user_id)
+@app.delete("/admin/users/{user_id}", dependencies=[Depends(require_admin)], response_model=UserOut)
+def ajax_delete_user(user_id: int, db=Depends(get_db)):
+    u = delete_user(db, user_id)
     if not u:
         raise HTTPException(404, "User not found")
     return u
 
-# --- Sessions (with hardware) ---
-@app.get("/admin/sessions", response_model=list[SessionOut],
-         dependencies=[Depends(auth.get_admin_user)])
-def admin_list_sessions(db: Session = Depends(get_db)):
-    return crud.list_sessions(db)
+@app.get("/admin/sessions", dependencies=[Depends(require_admin)], response_model=list[SessionOut])
+def ajax_list_sessions(request: Request, db=Depends(get_db)):
+    # record page‐hit as session?
+    record_session(db,
+                   user_id = None,
+                   ip       = request.client.host,
+                   user_agent = request.headers.get("user-agent",""))
+    return list_sessions(db)
 
-# --- API Key Management ---
-@app.post("/admin/keys", response_model=APIKeyOut,
-          dependencies=[Depends(auth.get_admin_user)])
-def admin_create_key(data: APIKeyCreate, db: Session = Depends(get_db)):
-    return crud.create_api_key(db, data.user_id, data.scopes, data.usage_quota)
+@app.get("/admin/keys", dependencies=[Depends(require_admin)], response_model=list[ApiKeyOut])
+def ajax_list_keys(db=Depends(get_db)):
+    return list_api_keys(db)
 
-@app.get("/admin/keys", response_model=list[APIKeyOut],
-         dependencies=[Depends(auth.get_admin_user)])
-def admin_list_keys(db: Session = Depends(get_db)):
-    return crud.list_api_keys(db)
+@app.post("/admin/keys/{user_id}", dependencies=[Depends(require_admin)], response_model=ApiKeyOut)
+def ajax_create_key(user_id: int, db=Depends(get_db)):
+    return create_api_key(db, user_id)
 
-@app.delete("/admin/keys/{key}", dependencies=[Depends(auth.get_admin_user)])
-def admin_revoke_key(key: str, db: Session = Depends(get_db)):
-    ak = crud.revoke_api_key(db, key)
-    if not ak:
-        raise HTTPException(404, "API Key not found")
-    return {"status":"revoked"}
-
-# --- Static admin panel ---
-@app.get("/admin", response_class=HTMLResponse,
-         dependencies=[Depends(auth.get_admin_user)])
-def admin_panel():
-    with open("static/admin.html", "r") as f:
-        return HTMLResponse(f.read())
+@app.delete("/admin/keys/{key}", dependencies=[Depends(require_admin)], response_model=ApiKeyOut)
+def ajax_revoke_key(key: str, db=Depends(get_db)):
+    k = revoke_api_key(db, key)
+    if not k:
+        raise HTTPException(404, "Key not found")
+    return k
