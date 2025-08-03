@@ -1,88 +1,93 @@
-import os
-from fastapi import FastAPI, Request, Depends, HTTPException, Form
-from fastapi.responses import RedirectResponse
+# main.py
+from fastapi import FastAPI, Depends, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
 
-from database import Base, engine, get_db
-from crud import (
-    authenticate_user, list_users, delete_user,
-    list_sessions, record_session,
-    create_api_key, list_api_keys, revoke_api_key
-)
-from security import ADMIN_USER, ADMIN_PASS, SESSION_SECRET
-from schemas import UserOut, SessionOut, ApiKeyOut
+from database import Base, engine, Session  # your existing imports
+from auth import authenticate_user, create_access_token, get_current_user, get_admin_user, get_db
+from crud import create_user, list_users, delete_user, list_sessions, record_session
+from schemas import UserCreate, UserOut, SessionOut, Token
 
-# Create tables
+# create your tables as before
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
-# mount static/
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+app = FastAPI(title="ARCHITECH Auth API")
+
+# 1) Serve static files from ./static
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 2) Point Jinja2Templates at ./templates
 templates = Jinja2Templates(directory="templates")
 
-# dependency: only admin may call
-def require_admin(req: Request):
-    if req.session.get("user") != ADMIN_USER:
-        raise HTTPException(401, "Not authenticated")
 
-# ——— LOGIN FLow ————————————————————————————————
+# ---- your existing API endpoints (token, CRUD, etc.) go here unchanged ----
+# e.g.:
+# @app.post("/token", response_model=Token)
+# async def login_token(...):
+#     ...
 
-@app.get("/admin")
-def get_admin(request: Request):
-    if request.session.get("user") != ADMIN_USER:
-        return templates.TemplateResponse("login.html", {"request": request, "error": ""})
-    return templates.TemplateResponse("admin.html", {"request": request})
 
-@app.post("/admin/login")
-def do_login(request: Request,
-             username: str = Form(...),
-             password: str = Form(...)):
-    if username == ADMIN_USER and password == ADMIN_PASS:
-        request.session["user"] = ADMIN_USER
-        return RedirectResponse("/admin", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials"})
+# ---- new simple admin‐panel auth + templating ----
+
+# hard-coded admin creds:
+ADMIN_USER = "architect66"
+ADMIN_PASS = r"v+ir2E9WELO%JY\H"
+
+def is_admin_cookie(request: Request) -> bool:
+    return request.cookies.get("admin_auth") == "1"
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_get(request: Request):
+    """
+    GET /admin
+    - if not logged in: shows login form
+    - if logged in: shows main panel (templates/admin.html JS will flip views)
+    """
+    auth = is_admin_cookie(request)
+    return templates.TemplateResponse(
+        "admin.html",
+        {"request": request, "user_is_authenticated": auth}
+    )
+
+@app.post("/admin/login", response_class=HTMLResponse)
+async def admin_login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    """
+    POST /admin/login
+    Checks form creds, sets a secure cookie on success, redirects back to /admin.
+    """
+    if username != ADMIN_USER or password != ADMIN_PASS:
+        # send back to login with an error (you can wire this into your template later)
+        return templates.TemplateResponse(
+            "admin.html",
+            {
+                "request": request,
+                "user_is_authenticated": False,
+                "error_message": "Invalid username or password."
+            }
+        )
+
+    # on success, set cookie and redirect
+    response = RedirectResponse(url="/admin", status_code=302)
+    response.set_cookie(
+        key="admin_auth",
+        value="1",
+        httponly=True,
+        secure=True,      # HTTPS-only
+        max_age=60*60*24  # 1 day
+    )
+    return response
 
 @app.get("/admin/logout")
-def do_logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/admin", status_code=302)
-
-# ——— ADMIN AJAX ENDPOINTS ————————————————————————
-
-@app.get("/admin/users", dependencies=[Depends(require_admin)], response_model=list[UserOut])
-def ajax_list_users(db=Depends(get_db)):
-    return list_users(db)
-
-@app.delete("/admin/users/{user_id}", dependencies=[Depends(require_admin)], response_model=UserOut)
-def ajax_delete_user(user_id: int, db=Depends(get_db)):
-    u = delete_user(db, user_id)
-    if not u:
-        raise HTTPException(404, "User not found")
-    return u
-
-@app.get("/admin/sessions", dependencies=[Depends(require_admin)], response_model=list[SessionOut])
-def ajax_list_sessions(request: Request, db=Depends(get_db)):
-    # record page‐hit as session?
-    record_session(db,
-                   user_id = None,
-                   ip       = request.client.host,
-                   user_agent = request.headers.get("user-agent",""))
-    return list_sessions(db)
-
-@app.get("/admin/keys", dependencies=[Depends(require_admin)], response_model=list[ApiKeyOut])
-def ajax_list_keys(db=Depends(get_db)):
-    return list_api_keys(db)
-
-@app.post("/admin/keys/{user_id}", dependencies=[Depends(require_admin)], response_model=ApiKeyOut)
-def ajax_create_key(user_id: int, db=Depends(get_db)):
-    return create_api_key(db, user_id)
-
-@app.delete("/admin/keys/{key}", dependencies=[Depends(require_admin)], response_model=ApiKeyOut)
-def ajax_revoke_key(key: str, db=Depends(get_db)):
-    k = revoke_api_key(db, key)
-    if not k:
-        raise HTTPException(404, "Key not found")
-    return k
+async def admin_logout():
+    """
+    GET /admin/logout
+    Clears the auth cookie and redirects to /admin (login screen).
+    """
+    response = RedirectResponse(url="/admin", status_code=302)
+    response.delete_cookie("admin_auth")
+    return response
