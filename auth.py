@@ -1,23 +1,24 @@
 # auth.py
-import os
 from datetime import datetime, timedelta
 from typing import Generator
-
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-
-from database import Session as SessionLocal
-from crud import get_user_by_username  # see step 2
+from database import SessionLocal
+from crud import record_session
+from models import User
 from schemas import Token
 
-# load these from env in production!
-SECRET_KEY = os.getenv("SECRET_KEY", "f2487a44fee137302e164195684a3d99")
+# --------------------------------------------------
+# === CONFIGURATION ===
+# keep this secret; load from ENV in prod!
+SECRET_KEY = "your-secret-key-here"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# --------------------------------------------------
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -35,47 +36,40 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user_by_username(db, username)
+def authenticate_user(db: Session, username: str, password: str) -> User | None:
+    user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(password, user.hashed_pw):
-        return False
+        return None
     return user
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
-    expire = (datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> str:
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub: str | None = payload.get("sub")
-        if sub is None:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
-        return sub
+        username: str = payload.get("sub")  # our “sub” claim is the username
+        if username is None:
+            raise credentials_exception
     except JWTError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
-
-
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
-    username = decode_token(token)
-    user = get_user_by_username(db, username)
-    if not user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+        raise credentials_exception
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
     return user
 
 
-def get_admin_user(current_user=Depends(get_current_user)):
+async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not enough permissions")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
