@@ -3,18 +3,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-SQL_URL = "sqlite:///./app.db"
+# point this at your SQLite (or swap to Postgres if you like)
+SQLALCHEMY_DATABASE_URL = "sqlite:///./app.db"
 
+# create engine
 engine = create_engine(
-    SQL_URL,
-    connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},  # only for SQLite
 )
 
-# Rename the session factory to SessionLocal so imports line up
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+# this is your Session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# base class for models
 Base = declarative_base()
